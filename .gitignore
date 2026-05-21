@@ -7,3 +7,5 @@ data/*.csv
 .pytest_cache/
 mlops-deployer_accessKeys.csv
 mlops-aws-poc.code-workspace
+docs/demo-paso-a-paso.md
+.gitignore
