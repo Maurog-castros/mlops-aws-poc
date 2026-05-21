@@ -375,10 +375,10 @@ Host inicial:
 192.168.1.12
 ```
 
-Usuario temporal - SSH / pass:
+Usuario SSH:
 
 ```text
-mauro / Twelve12$
+mauro
 ```
 
 Pasos:
@@ -416,6 +416,71 @@ Criterios de validacion:
 - La API debe responder desde la LAN.
 - Debe existir un procedimiento claro para reiniciar el servicio.
 
+Estrategia de despliegue:
+
+Para esta fase se usara transferencia de imagen local por SSH/SCP. No depende
+de registry ni de Git pull en el servidor. El flujo queda preparado para cambiar
+a ECR en la fase AWS.
+
+Archivos:
+
+- `compose.lan.yml`: ejecuta la API en el servidor LAN usando la imagen
+  `mlops-aws-poc:local`.
+- `lan.env.example`: documenta host, usuario, puerto y directorio remoto.
+- `scripts/lan.ps1`: empaqueta, copia, despliega y opera el servicio remoto.
+
+Directorio remoto por defecto:
+
+```text
+/home/mauro/mlops-aws-poc
+```
+
+Requisitos del servidor:
+
+- Ubuntu Server accesible por SSH.
+- Docker instalado.
+- Docker Compose disponible como `docker compose`.
+- Usuario con permisos para ejecutar Docker, o usar `-UseSudo`.
+
+Comandos desde Windows:
+
+```powershell
+.\scripts\lan.ps1 -Action check
+.\scripts\lan.ps1 -Action deploy
+.\scripts\lan.ps1 -Action status
+.\scripts\lan.ps1 -Action smoke
+.\scripts\lan.ps1 -Action logs
+.\scripts\lan.ps1 -Action restart
+.\scripts\lan.ps1 -Action stop
+```
+
+Si Docker requiere sudo en Ubuntu:
+
+```powershell
+.\scripts\lan.ps1 -Action deploy -UseSudo
+```
+
+Validacion desde Windows:
+
+```powershell
+Invoke-RestMethod http://192.168.1.12:8000/health
+Invoke-RestMethod `
+  -Uri http://192.168.1.12:8000/predict `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Body '{"features":[1,2,3]}'
+```
+
+Rollback operativo:
+
+```powershell
+.\scripts\lan.ps1 -Action stop
+```
+
+El modelo `models/model.joblib` se copia al servidor solo si existe localmente.
+Si no existe, `/health` seguira funcionando y `/predict` devolvera el error
+controlado de modelo no disponible.
+
 ### Fase 7: AWS deploy simple
 
 Objetivo:
@@ -451,6 +516,63 @@ Criterios de validacion:
 - La imagen debe quedar versionada en ECR.
 - El servicio debe responder `/health`.
 - El despliegue debe poder repetirse desde CI/CD.
+
+Implementacion:
+
+- `infra/aws/ecs-fargate.yml`: CloudFormation para ECS/Fargate con ALB
+  publico, security groups, task definition, service y logs.
+- `.github/workflows/deploy-aws.yml`: workflow manual para construir, publicar
+  en ECR y desplegar/actualizar ECS.
+- `aws.env.example`: variables operativas esperadas.
+- `scripts/aws.ps1`: validaciones locales de AWS CLI, template y build Docker.
+
+Secrets requeridos en GitHub:
+
+| Secret | Uso |
+| --- | --- |
+| `AWS_ACCESS_KEY_ID` | Credencial de despliegue. |
+| `AWS_SECRET_ACCESS_KEY` | Credencial de despliegue. |
+
+Permisos minimos de la credencial:
+
+- ECR: crear repositorio si no existe, login, push de imagen.
+- CloudFormation: crear/actualizar stack.
+- ECS/Fargate: crear cluster, service y task definition.
+- EC2/ELB: consultar VPC/subnets y crear ALB/security groups.
+- IAM: crear task execution role.
+- CloudWatch Logs: crear log group para ECS.
+
+Ejecucion desde GitHub:
+
+1. Ir a `Actions`.
+2. Seleccionar `deploy-aws`.
+3. Ejecutar `Run workflow`.
+4. Confirmar `environment`, `aws_region`, `ecr_repository`, `stack_name` y
+   `allowed_http_cidr`.
+
+Validacion local previa:
+
+```powershell
+.\scripts\aws.ps1 -Action package
+.\scripts\aws.ps1 -Action validate-template -Region us-east-1
+```
+
+Cuando el stack termine, obtener la URL:
+
+```powershell
+.\scripts\aws.ps1 -Action outputs -Region us-east-1 -StackName mlops-aws-poc-poc
+```
+
+Validacion del servicio:
+
+```powershell
+Invoke-RestMethod http://<load-balancer-url>/health
+```
+
+Nota operacional: en esta fase el modelo no queda persistido en AWS. El
+contenedor puede responder `/health`; `/predict` devolvera el error controlado
+de modelo no disponible hasta definir almacenamiento de artefactos en una fase
+posterior, por ejemplo S3 o EFS.
 
 ### Fase 8: Observabilidad con CloudWatch
 

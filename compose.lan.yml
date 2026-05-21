@@ -1,0 +1,28 @@
+name: mlops-aws-poc-lan
+
+services:
+  api:
+    image: mlops-aws-poc:local
+    container_name: mlops-aws-poc-api
+    restart: unless-stopped
+    environment:
+      APP_HOST: ${APP_HOST:-0.0.0.0}
+      APP_PORT: ${APP_PORT:-8000}
+      MODEL_PATH: ${MODEL_PATH:-models/model.joblib}
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    volumes:
+      - ./models:/app/models:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+

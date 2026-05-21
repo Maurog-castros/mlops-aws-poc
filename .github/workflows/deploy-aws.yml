@@ -1,0 +1,114 @@
+name: deploy-aws
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment name.
+        required: true
+        default: poc
+      aws_region:
+        description: AWS region.
+        required: true
+        default: us-east-1
+      ecr_repository:
+        description: ECR repository name.
+        required: true
+        default: mlops-aws-poc
+      stack_name:
+        description: CloudFormation stack name.
+        required: true
+        default: mlops-aws-poc-poc
+      allowed_http_cidr:
+        description: CIDR allowed to access the public ALB.
+        required: true
+        default: 0.0.0.0/0
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: ecr and ecs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Resolve default network
+        id: network
+        run: |
+          VPC_ID="$(aws ec2 describe-vpcs \
+            --filters Name=is-default,Values=true \
+            --query 'Vpcs[0].VpcId' \
+            --output text)"
+
+          SUBNET_IDS="$(aws ec2 describe-subnets \
+            --filters Name=vpc-id,Values="${VPC_ID}" Name=map-public-ip-on-launch,Values=true \
+            --query 'Subnets[].SubnetId' \
+            --output text | tr '\t' ',')"
+
+          if [ -z "${VPC_ID}" ] || [ "${VPC_ID}" = "None" ]; then
+            echo "Default VPC not found." >&2
+            exit 1
+          fi
+
+          if [ -z "${SUBNET_IDS}" ]; then
+            echo "Public subnets not found in ${VPC_ID}." >&2
+            exit 1
+          fi
+
+          echo "vpc_id=${VPC_ID}" >> "${GITHUB_OUTPUT}"
+          echo "subnet_ids=${SUBNET_IDS}" >> "${GITHUB_OUTPUT}"
+
+      - name: Ensure ECR repository
+        run: |
+          aws ecr describe-repositories \
+            --repository-names "${{ inputs.ecr_repository }}" >/dev/null 2>&1 \
+          || aws ecr create-repository \
+            --repository-name "${{ inputs.ecr_repository }}" \
+            --image-scanning-configuration scanOnPush=true
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ inputs.ecr_repository }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
+          docker build -t "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+          echo "uri=${IMAGE_URI}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy ECS Fargate stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${{ inputs.stack_name }}" \
+            --template-file infra/aws/ecs-fargate.yml \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              EnvironmentName="${{ inputs.environment }}" \
+              ImageUri="${{ steps.image.outputs.uri }}" \
+              VpcId="${{ steps.network.outputs.vpc_id }}" \
+              PublicSubnetIds="${{ steps.network.outputs.subnet_ids }}" \
+              AllowedHttpCidr="${{ inputs.allowed_http_cidr }}"
+
+      - name: Show service URL
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name "${{ inputs.stack_name }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerUrl'].OutputValue" \
+            --output text
