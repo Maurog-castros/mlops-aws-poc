@@ -173,7 +173,7 @@ Objetivo:
 
 Empaquetar la API en una imagen Docker reproducible para ejecutar la PoC sin
 depender del entorno local. Esta fase tambien deja la base para ejecutar el
-servicio en Ministack y en la maquina Ubuntu Server de la LAN.
+servicio en Ministack y en la maquina Ubuntu Server de la LAN.  ssh mauro@192.168.1.12
 
 Pasos:
 
@@ -201,6 +201,27 @@ Comandos sugeridos:
 docker build -t mlops-aws-poc:local .
 docker run --rm -p 8000:8000 mlops-aws-poc:local
 ```
+
+Variables de entorno:
+
+| Variable | Default | Uso |
+| --- | --- | --- |
+| `APP_HOST` | `0.0.0.0` | Interfaz donde escucha Uvicorn dentro del contenedor. |
+| `APP_PORT` | `8000` | Puerto interno de la API. |
+| `MODEL_PATH` | `models/model.joblib` | Ruta del artefacto `joblib` dentro del contenedor. |
+
+Ejecucion con modelo montado:
+
+```bash
+docker run --rm -p 8000:8000 \
+  -v /ruta/modelos:/app/models:ro \
+  -e MODEL_PATH=models/model.joblib \
+  mlops-aws-poc:local
+```
+
+Para Ministack o Ubuntu Server LAN, la imagen no requiere cambios de codigo:
+se debe publicar o copiar la misma imagen, montar el directorio de modelos en
+`/app/models` y exponer el puerto `8000` segun el ambiente.
 
 Criterios de validacion:
 
@@ -240,6 +261,64 @@ Criterios de validacion:
 - La API debe responder desde el host Windows.
 - La configuracion debe poder reutilizar la misma imagen Docker.
 - Las diferencias contra el despliegue LAN deben quedar documentadas.
+
+Configuracion local:
+
+- `compose.ministack.yml`: define el servicio `api` usando la misma imagen
+  `mlops-aws-poc:local`.
+- `ministack.env.example`: documenta variables de ejecucion.
+- `scripts/ministack.ps1`: centraliza comandos operativos desde Windows.
+- `scripts/create_smoke_model.py`: genera un modelo local de prueba para
+  validar `/predict`.
+
+Componentes que corren en Ministack:
+
+| Componente | Responsabilidad | Puerto |
+| --- | --- | --- |
+| `api` | FastAPI + Uvicorn | `HOST_PORT` -> `8000` |
+| `models/` | Artefactos `joblib` montados como volumen read-only | N/A |
+
+Variables de entorno:
+
+| Variable | Default | Uso |
+| --- | --- | --- |
+| `APP_HOST` | `0.0.0.0` | Bind interno de Uvicorn. |
+| `APP_PORT` | `8000` | Puerto interno del contenedor. |
+| `HOST_PORT` | `8000` | Puerto expuesto en Windows. |
+| `MODEL_PATH` | `models/model.joblib` | Ruta del modelo dentro del contenedor. |
+
+Comandos operativos:
+
+```powershell
+.\scripts\ministack.ps1 -Action model
+.\scripts\ministack.ps1 -Action build
+.\scripts\ministack.ps1 -Action start
+.\scripts\ministack.ps1 -Action status
+.\scripts\ministack.ps1 -Action smoke
+.\scripts\ministack.ps1 -Action logs
+.\scripts\ministack.ps1 -Action stop
+.\scripts\ministack.ps1 -Action clean
+```
+
+Validacion manual desde Windows:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod `
+  -Uri http://localhost:8000/predict `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Body '{"features":[1,2,3]}'
+```
+
+Diferencias por ambiente:
+
+| Ambiente | Uso | Modelo | Red |
+| --- | --- | --- | --- |
+| Local directo | Desarrollo rapido con `.venv` | Archivo local en `models/` | `localhost` |
+| Docker directo | Validar imagen aislada | Volumen manual `-v` | `localhost:8000` |
+| Ministack | Operacion local reproducible | Volumen Compose read-only | `HOST_PORT` |
+| Ubuntu LAN | Staging interno | Volumen o release remoto | IP LAN del host |
 
 ### Fase 5: CI/CD con GitHub Actions
 
