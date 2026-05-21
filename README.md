@@ -557,6 +557,12 @@ Validacion local previa:
 .\scripts\aws.ps1 -Action validate-template -Region us-east-1
 ```
 
+Despliegue desde la maquina local:
+
+```powershell
+.\scripts\aws.ps1 -Action deploy-local -Region us-east-1 -StackName mlops-aws-poc-poc
+```
+
 Cuando el stack termine, obtener la URL:
 
 ```powershell
@@ -601,6 +607,32 @@ Criterios de validacion:
 - Cada request relevante debe dejar traza operativa.
 - Los errores deben quedar visibles en CloudWatch.
 - Debe existir una forma simple de detectar caidas del servicio.
+
+Implementacion:
+
+- `app/observability.py` configura logs JSON hacia stdout.
+- Cada request agrega el header `X-Process-Time-Ms`.
+- Cada request registra metodo, path, status code y duracion.
+- `/predict` registra predicciones exitosas, modelo no disponible y errores de
+  inferencia.
+- ECS envia stdout/stderr a CloudWatch Logs mediante `awslogs`.
+- CloudFormation crea alarmas para:
+  - errores de aplicacion detectados en logs JSON;
+  - targets no saludables en el ALB;
+  - CPU alta del servicio ECS;
+  - memoria alta del servicio ECS.
+
+Validacion:
+
+```powershell
+Invoke-RestMethod http://<load-balancer-url>/health
+Invoke-RestMethod `
+  -Uri http://<load-balancer-url>/predict `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Body '{"features":[1,2,3]}'
+.\scripts\aws.ps1 -Action outputs -Region us-east-1 -StackName mlops-aws-poc-poc
+```
 
 ### Fase 9: Model registry simple y versionado
 

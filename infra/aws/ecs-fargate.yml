@@ -29,6 +29,18 @@ Parameters:
   ModelPath:
     Type: String
     Default: models/model.joblib
+  AlarmEvaluationPeriods:
+    Type: Number
+    Default: 2
+  ErrorAlarmThreshold:
+    Type: Number
+    Default: 1
+  CpuAlarmThreshold:
+    Type: Number
+    Default: 80
+  MemoryAlarmThreshold:
+    Type: Number
+    Default: 80
 
 Resources:
   Cluster:
@@ -165,6 +177,83 @@ Resources:
           ContainerPort: !Ref ContainerPort
           TargetGroupArn: !Ref TargetGroup
 
+  ErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LogGroup
+      FilterPattern: '{ $.level = "ERROR" }'
+      MetricTransformations:
+        - MetricNamespace: !Sub mlops-aws-poc/${EnvironmentName}
+          MetricName: ApplicationErrors
+          MetricValue: "1"
+
+  ApplicationErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Application emitted error logs.
+      Namespace: !Sub mlops-aws-poc/${EnvironmentName}
+      MetricName: ApplicationErrors
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref AlarmEvaluationPeriods
+      Threshold: !Ref ErrorAlarmThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  UnHealthyHostsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: ALB target group has unhealthy ECS tasks.
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: !Ref AlarmEvaluationPeriods
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TargetGroup
+          Value: !GetAtt TargetGroup.TargetGroupFullName
+        - Name: LoadBalancer
+          Value: !GetAtt LoadBalancer.LoadBalancerFullName
+
+  HighCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: ECS service CPU utilization is high.
+      Namespace: AWS/ECS
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: !Ref AlarmEvaluationPeriods
+      Threshold: !Ref CpuAlarmThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref Cluster
+        - Name: ServiceName
+          Value: !GetAtt Service.Name
+
+  HighMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: ECS service memory utilization is high.
+      Namespace: AWS/ECS
+      MetricName: MemoryUtilization
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: !Ref AlarmEvaluationPeriods
+      Threshold: !Ref MemoryAlarmThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref Cluster
+        - Name: ServiceName
+          Value: !GetAtt Service.Name
+
 Outputs:
   ClusterName:
     Value: !Ref Cluster
@@ -174,4 +263,11 @@ Outputs:
     Value: !Sub http://${LoadBalancer.DNSName}
   LogGroupName:
     Value: !Ref LogGroup
-
+  ApplicationErrorsAlarmName:
+    Value: !Ref ApplicationErrorsAlarm
+  UnHealthyHostsAlarmName:
+    Value: !Ref UnHealthyHostsAlarm
+  HighCpuAlarmName:
+    Value: !Ref HighCpuAlarm
+  HighMemoryAlarmName:
+    Value: !Ref HighMemoryAlarm
