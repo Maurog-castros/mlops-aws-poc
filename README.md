@@ -14,7 +14,9 @@ dejarlo listo para un despliegue inicial en AWS.
 - Exponer inferencia mediante una API con FastAPI.
 - Ejecutar pruebas automatizadas con pytest.
 - Contenerizar el servicio con Docker.
+- Usar Ministack como entorno local de infraestructura para la PoC.
 - Automatizar CI/CD con GitHub Actions.
+- Usar una maquina Ubuntu Server en la LAN como ambiente intermedio de despliegue.
 - Publicar imagen en AWS ECR.
 - Desplegar el servicio en AWS ECS/Fargate o EC2.
 - Agregar logs y observabilidad básica con CloudWatch.
@@ -31,6 +33,8 @@ dejarlo listo para un despliegue inicial en AWS.
 - joblib
 - pytest
 - Docker
+- Ministack
+- Ubuntu Server LAN
 - GitHub Actions
 - AWS ECR
 - AWS ECS/Fargate o EC2
@@ -73,6 +77,22 @@ mlops-aws-poc/
 ```
 
 ## Roadmap de la PoC
+
+### Supuestos nuevos de infraestructura
+
+Ademas del plan inicial, la PoC considera dos elementos operativos:
+
+1. **Ministack** se usara como entorno local de infraestructura para validar
+   servicios y dependencias antes de pasar a despliegues remotos.
+2. **Ubuntu Server en LAN** se usara como ambiente intermedio de despliegue.
+   La maquina disponible actualmente responde en `192.168.1.12` mediante SSH
+   con el usuario `mauro`.
+
+Flujo objetivo de ambientes:
+
+```text
+Local Windows -> Ministack -> Ubuntu Server LAN -> AWS
+```
 
 ### Fase 1: Repo base y modelo ML local
 
@@ -152,7 +172,8 @@ Criterios de validacion:
 Objetivo:
 
 Empaquetar la API en una imagen Docker reproducible para ejecutar la PoC sin
-depender del entorno local.
+depender del entorno local. Esta fase tambien deja la base para ejecutar el
+servicio en Ministack y en la maquina Ubuntu Server de la LAN.
 
 Pasos:
 
@@ -164,12 +185,15 @@ Pasos:
 6. Construir la imagen localmente.
 7. Ejecutar el contenedor localmente.
 8. Validar `/health` y `/predict` dentro del contenedor.
+9. Validar que la imagen pueda ser usada por Ministack.
+10. Documentar variables de entorno requeridas para ejecucion local y LAN.
 
 Entregables:
 
 - `Dockerfile`.
 - `.dockerignore`.
 - Imagen Docker local funcional.
+- Base lista para ejecucion en Ministack.
 
 Comandos sugeridos:
 
@@ -183,8 +207,41 @@ Criterios de validacion:
 - El contenedor debe iniciar sin errores.
 - `GET http://localhost:8000/health` debe responder correctamente.
 - La imagen no debe incluir `.venv/`, `.git/`, caches ni datasets locales.
+- La configuracion debe poder trasladarse a Ministack sin cambios de codigo.
 
-### Fase 4: CI/CD con GitHub Actions
+### Fase 4: Entorno local con Ministack
+
+Objetivo:
+
+Usar Ministack como entorno local de infraestructura para validar la API y sus
+dependencias antes de pasar al servidor Ubuntu LAN o AWS.
+
+Pasos:
+
+1. Definir que componentes de la PoC correran en Ministack.
+2. Documentar requisitos locales de instalacion.
+3. Configurar la ejecucion de la API dentro del entorno Ministack.
+4. Validar variables de entorno y puertos.
+5. Ejecutar healthcheck desde el host Windows.
+6. Probar inferencia contra el servicio expuesto por Ministack.
+7. Documentar comandos de inicio, parada, logs y limpieza.
+8. Definir que diferencias existen entre ejecucion local directa, Docker y
+   Ministack.
+
+Entregables:
+
+- Guia de ejecucion con Ministack.
+- Configuracion local reproducible.
+- Validacion de `/health` y `/predict` desde Windows.
+
+Criterios de validacion:
+
+- El servicio debe iniciar dentro de Ministack.
+- La API debe responder desde el host Windows.
+- La configuracion debe poder reutilizar la misma imagen Docker.
+- Las diferencias contra el despliegue LAN deben quedar documentadas.
+
+### Fase 5: CI/CD con GitHub Actions
 
 Objetivo:
 
@@ -211,7 +268,61 @@ Criterios de validacion:
 - El pipeline debe fallar si los tests fallan.
 - El build Docker debe completarse correctamente.
 
-### Fase 5: AWS deploy simple
+### Fase 6: Despliegue intermedio en Ubuntu Server LAN
+
+Objetivo:
+
+Usar la maquina Ubuntu Server disponible en la LAN como ambiente de staging
+operativo antes de avanzar a AWS.
+
+Host inicial:
+
+```text
+192.168.1.12
+```
+
+Usuario SSH:
+
+```text
+mauro
+```
+
+Pasos:
+
+1. Validar acceso SSH estable hacia `mauro@192.168.1.12`.
+2. Revisar version de Ubuntu, Docker y Docker Compose.
+3. Instalar dependencias faltantes si corresponde.
+4. Copiar o desplegar la imagen Docker de la API.
+5. Ejecutar el contenedor en la maquina LAN.
+6. Exponer el puerto interno para pruebas desde la red local.
+7. Validar `/health` desde Windows.
+8. Validar `/predict` desde Windows.
+9. Documentar comandos de arranque, parada, logs y actualizacion.
+10. Definir si este ambiente usara imagen local, Git pull o registry.
+
+Entregables:
+
+- API ejecutandose en Ubuntu Server LAN.
+- Procedimiento documentado de despliegue interno.
+- Comandos de operacion basicos: start, stop, logs, restart.
+
+Comandos sugeridos:
+
+```bash
+ssh mauro@192.168.1.12
+docker ps
+docker logs <container_name>
+curl http://localhost:8000/health
+```
+
+Criterios de validacion:
+
+- SSH debe funcionar de forma estable.
+- Docker debe poder ejecutar la imagen de la API.
+- La API debe responder desde la LAN.
+- Debe existir un procedimiento claro para reiniciar el servicio.
+
+### Fase 7: AWS deploy simple
 
 Objetivo:
 
@@ -247,7 +358,7 @@ Criterios de validacion:
 - El servicio debe responder `/health`.
 - El despliegue debe poder repetirse desde CI/CD.
 
-### Fase 6: Observabilidad con CloudWatch
+### Fase 8: Observabilidad con CloudWatch
 
 Objetivo:
 
@@ -275,7 +386,7 @@ Criterios de validacion:
 - Los errores deben quedar visibles en CloudWatch.
 - Debe existir una forma simple de detectar caidas del servicio.
 
-### Fase 7: Model registry simple y versionado
+### Fase 9: Model registry simple y versionado
 
 Objetivo:
 
@@ -315,7 +426,7 @@ Criterios de validacion:
 - Cada modelo debe tener metadata asociada.
 - Debe ser posible saber que modelo esta usando la API.
 
-### Fase 8: Drift y monitoring conceptual
+### Fase 10: Drift y monitoring conceptual
 
 Objetivo:
 
