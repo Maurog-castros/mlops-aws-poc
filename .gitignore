@@ -6,3 +6,4 @@ models/*.joblib
 data/*.csv
 .pytest_cache/
 mlops-deployer_accessKeys.csv
+mlops-aws-poc.code-workspace
