@@ -204,11 +204,11 @@ docker run --rm -p 8000:8000 mlops-aws-poc:local
 
 Variables de entorno:
 
-| Variable | Default | Uso |
-| --- | --- | --- |
-| `APP_HOST` | `0.0.0.0` | Interfaz donde escucha Uvicorn dentro del contenedor. |
-| `APP_PORT` | `8000` | Puerto interno de la API. |
-| `MODEL_PATH` | `models/model.joblib` | Ruta del artefacto `joblib` dentro del contenedor. |
+| Variable       | Default                 | Uso                                                   |
+| -------------- | ----------------------- | ----------------------------------------------------- |
+| `APP_HOST`   | `0.0.0.0`             | Interfaz donde escucha Uvicorn dentro del contenedor. |
+| `APP_PORT`   | `8000`                | Puerto interno de la API.                             |
+| `MODEL_PATH` | `models/model.joblib` | Ruta del artefacto `joblib` dentro del contenedor.  |
 
 Ejecucion con modelo montado:
 
@@ -273,18 +273,18 @@ Configuracion local:
 
 Componentes que corren en Ministack:
 
-| Componente | Responsabilidad | Puerto |
-| --- | --- | --- |
-| `api` | FastAPI + Uvicorn | `HOST_PORT` -> `8000` |
-| `models/` | Artefactos `joblib` montados como volumen read-only | N/A |
+| Componente  | Responsabilidad                                       | Puerto                    |
+| ----------- | ----------------------------------------------------- | ------------------------- |
+| `api`     | FastAPI + Uvicorn                                     | `HOST_PORT` -> `8000` |
+| `models/` | Artefactos `joblib` montados como volumen read-only | N/A                       |
 
 Variables de entorno:
 
-| Variable | Default | Uso |
-| --- | --- | --- |
-| `APP_HOST` | `0.0.0.0` | Bind interno de Uvicorn. |
-| `APP_PORT` | `8000` | Puerto interno del contenedor. |
-| `HOST_PORT` | `8000` | Puerto expuesto en Windows. |
+| Variable       | Default                 | Uso                                    |
+| -------------- | ----------------------- | -------------------------------------- |
+| `APP_HOST`   | `0.0.0.0`             | Bind interno de Uvicorn.               |
+| `APP_PORT`   | `8000`                | Puerto interno del contenedor.         |
+| `HOST_PORT`  | `8000`                | Puerto expuesto en Windows.            |
 | `MODEL_PATH` | `models/model.joblib` | Ruta del modelo dentro del contenedor. |
 
 Comandos operativos:
@@ -313,12 +313,12 @@ Invoke-RestMethod `
 
 Diferencias por ambiente:
 
-| Ambiente | Uso | Modelo | Red |
-| --- | --- | --- | --- |
-| Local directo | Desarrollo rapido con `.venv` | Archivo local en `models/` | `localhost` |
-| Docker directo | Validar imagen aislada | Volumen manual `-v` | `localhost:8000` |
-| Ministack | Operacion local reproducible | Volumen Compose read-only | `HOST_PORT` |
-| Ubuntu LAN | Staging interno | Volumen o release remoto | IP LAN del host |
+| Ambiente       | Uso                             | Modelo                       | Red                |
+| -------------- | ------------------------------- | ---------------------------- | ------------------ |
+| Local directo  | Desarrollo rapido con `.venv` | Archivo local en `models/` | `localhost`      |
+| Docker directo | Validar imagen aislada          | Volumen manual `-v`        | `localhost:8000` |
+| Ministack      | Operacion local reproducible    | Volumen Compose read-only    | `HOST_PORT`      |
+| Ubuntu LAN     | Staging interno                 | Volumen o release remoto     | IP LAN del host    |
 
 ### Fase 5: CI/CD con GitHub Actions
 
@@ -347,6 +347,21 @@ Criterios de validacion:
 - El pipeline debe fallar si los tests fallan.
 - El build Docker debe completarse correctamente.
 
+Workflow:
+
+- `.github/workflows/ci.yml` ejecuta `pytest` con Python 3.13.
+- El build Docker corre solo si los tests pasan.
+- La imagen se etiqueta como `mlops-aws-poc:${GITHUB_SHA}` dentro del runner.
+- La publicacion a AWS ECR queda fuera de este workflow hasta configurar IAM,
+  region, registry y permisos de despliegue.
+
+Validacion local equivalente:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+docker build -t mlops-aws-poc:local .
+```
+
 ### Fase 6: Despliegue intermedio en Ubuntu Server LAN
 
 Objetivo:
@@ -360,10 +375,10 @@ Host inicial:
 192.168.1.12
 ```
 
-Usuario SSH:
+Usuario temporal - SSH / pass:
 
 ```text
-mauro
+mauro / Twelve12$
 ```
 
 Pasos:
