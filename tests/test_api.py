@@ -3,6 +3,7 @@ import joblib
 
 from app.observability import PROCESS_TIME_HEADER
 from app.main import app
+from src.model_artifacts import parse_s3_uri
 
 client = TestClient(app)
 
@@ -12,6 +13,21 @@ def test_health():
     assert response.status_code == 200
     assert PROCESS_TIME_HEADER in response.headers
     assert response.json() == {"status": "ok"}
+
+
+def test_model_info():
+    response = client.get("/model")
+
+    assert response.status_code == 200
+    assert response.json()["model_name"] == "baseline_regressor"
+    assert response.json()["model_version"] == "v1"
+
+
+def test_parse_s3_uri():
+    assert parse_s3_uri("s3://bucket/path/model.joblib") == (
+        "bucket",
+        "path/model.joblib",
+    )
 
 
 class DummyModel:

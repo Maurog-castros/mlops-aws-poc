@@ -674,6 +674,24 @@ Criterios de validacion:
 - Cada modelo debe tener metadata asociada.
 - Debe ser posible saber que modelo esta usando la API.
 
+Implementacion:
+
+- `models/registry/baseline_regressor_v1.json`: metadata versionada del modelo
+  baseline.
+- `src/model_registry.py`: carga metadata y resume features.
+- `GET /model`: expone nombre, version, estado, metrica, dataset y ruta del
+  artefacto esperado por la API.
+- `scripts/register_model.py`: valida campos obligatorios y evita colisiones de
+  version.
+- `docs/model-registry.md`: documenta convencion, metadata y promocion.
+
+Validacion:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\register_model.py models\registry\baseline_regressor_v1.json
+Invoke-RestMethod http://localhost:8000/model
+```
+
 ### Fase 10: Drift y monitoring conceptual
 
 Objetivo:
@@ -701,6 +719,24 @@ Criterios de validacion:
 - Deben quedar claros los datos que se monitorean.
 - Debe existir una distincion entre error tecnico y drift del modelo.
 - Debe existir una propuesta para evolucionar el monitoreo.
+
+Implementacion:
+
+- `docs/drift-monitoring.md`: estrategia conceptual y umbrales iniciales.
+- `data/drift_baseline.json`: baseline estadistico versionado.
+- `/predict` registra resumen de features en logs estructurados:
+  `feature_count`, `feature_min`, `feature_max`, `feature_mean`.
+- `scripts/check_drift.py`: compara un resumen actual contra el baseline y
+  retorna codigo `2` si detecta drift.
+
+Validacion:
+
+```powershell
+$tmp = Join-Path $env:TEMP 'mlops-current-drift.json'
+'{"feature_count":3,"feature_min":1.1,"feature_max":4.1,"feature_mean":2.6}' |
+  Set-Content -Path $tmp -Encoding utf8
+.\.venv\Scripts\python.exe scripts\check_drift.py --current $tmp
+```
 
 ## Ejecucion local
 
@@ -747,9 +783,32 @@ la estructura del proyecto.
 
 ## Estado actual
 
-Fase actual: **Fase 1 - Repo base y modelo ML local**.
+Fases 1 a 10 implementadas para la PoC.
 
 Siguiente hito recomendado:
 
-Implementar el primer entrenamiento local en `src/train.py`, generar un modelo
-baseline en `models/` y conectar `src/predict.py` con el artefacto generado.
+Promover el artefacto del modelo a almacenamiento remoto, por ejemplo S3 o EFS,
+para que `/predict` pueda ejecutar inferencia real en AWS y no solo en local/LAN.
+
+## Artefactos de modelo en S3
+
+Para publicar un modelo en S3 y actualizar ECS:
+
+```powershell
+.\scripts\s3-model-artifact.ps1 -Action all -Region us-east-1 -StackName mlops-aws-poc-poc
+```
+
+Acciones disponibles:
+
+- `prepare`: crea/configura bucket S3 con versioning y bloqueo publico.
+- `upload`: sube `model.joblib` y metadata.
+- `deploy`: publica nueva imagen y actualiza ECS con `MODEL_S3_URI`.
+- `smoke`: valida `/health` y `/predict` contra el Load Balancer.
+- `all`: ejecuta todo el flujo.
+
+Ruta S3 por convencion:
+
+```text
+s3://<bucket>/models/<model_name>/<model_version>/model.joblib
+s3://<bucket>/models/<model_name>/<model_version>/metadata.json
+```

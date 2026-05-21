@@ -15,6 +15,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 COPY app ./app
 COPY src ./src
 COPY models/README.md ./models/README.md
+COPY models/registry ./models/registry
+COPY data/drift_baseline.json ./data/drift_baseline.json
 
 EXPOSE 8000
 

@@ -1,0 +1,11 @@
+{
+  "model_name": "baseline_regressor",
+  "model_version": "v1",
+  "trained_at": "2026-05-21T00:00:00Z",
+  "metric_name": "r2_score",
+  "metric_value": 1.0,
+  "dataset_name": "smoke_linear_features",
+  "artifact_path": "models/model.joblib",
+  "status": "local-baseline"
+}
+

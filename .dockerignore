@@ -16,8 +16,11 @@ __pycache__
 data/*.csv
 data/*.parquet
 data/*.xlsx
+!data/drift_baseline.json
 models/*.joblib
 models/*.pkl
+!models/registry/
+!models/registry/*.json
 
 tests
 README.md
