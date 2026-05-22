@@ -652,20 +652,20 @@ La configuracion recomendada es:
 https://token.actions.githubusercontent.com
 ```
 
-2. Crear un IAM Role que permita `sts:AssumeRoleWithWebIdentity` solo desde el
+1. Crear un IAM Role que permita `sts:AssumeRoleWithWebIdentity` solo desde el
    repo:
 
 ```text
 Maurog-castros/mlops-aws-poc
 ```
 
-3. Guardar el ARN del rol en GitHub Secrets:
+1. Guardar el ARN del rol en GitHub Secrets:
 
 ```text
 AWS_ROLE_TO_ASSUME
 ```
 
-4. Ejecutar el workflow `Deploy AWS`.
+1. Ejecutar el workflow `Deploy AWS`.
 
 Esto evita guardar `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` como secrets de
 larga vida.
