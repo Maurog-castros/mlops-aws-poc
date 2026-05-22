@@ -9,9 +9,11 @@ REQUIRED_FIELDS = {
     "trained_at",
     "metric_name",
     "metric_value",
+    "secondary_metrics",
     "dataset_name",
     "artifact_path",
     "status",
+    "features",
 }
 
 
@@ -40,4 +42,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

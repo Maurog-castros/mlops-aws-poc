@@ -34,6 +34,8 @@ dejarlo listo para un despliegue inicial en AWS.
 - pytest
 - Docker
 - Ministack
+- Minikube
+- Kubernetes
 - Ubuntu Server LAN
 - GitHub Actions
 - AWS ECR
@@ -91,7 +93,7 @@ Ademas del plan inicial, la PoC considera dos elementos operativos:
 Flujo objetivo de ambientes:
 
 ```text
-Local Windows -> Ministack -> Ubuntu Server LAN -> AWS
+Local Windows -> Docker -> Ministack -> Minikube -> Ubuntu Server LAN -> AWS
 ```
 
 ### Fase 1: Repo base y modelo ML local
@@ -308,7 +310,7 @@ Invoke-RestMethod `
   -Uri http://localhost:8000/predict `
   -Method Post `
   -ContentType 'application/json' `
-  -Body '{"features":[1,2,3]}'
+  -Body '{"tenure":12,"monthly_charges":89.5,"support_tickets":3}'
 ```
 
 Diferencias por ambiente:
@@ -318,7 +320,66 @@ Diferencias por ambiente:
 | Local directo  | Desarrollo rapido con `.venv` | Archivo local en `models/` | `localhost`      |
 | Docker directo | Validar imagen aislada          | Volumen manual `-v`        | `localhost:8000` |
 | Ministack      | Operacion local reproducible    | Volumen Compose read-only    | `HOST_PORT`      |
+| Minikube       | Validar Kubernetes local        | Secret read-only             | `port-forward`   |
 | Ubuntu LAN     | Staging interno                 | Volumen o release remoto     | IP LAN del host    |
+
+### Fase 4.5: Kubernetes local con Minikube
+
+Objetivo:
+
+Validar que la misma API Docker puede correr como workload Kubernetes antes de
+llevarla a ambientes remotos. Minikube no reemplaza ECS; sirve como entorno
+local para probar `Deployment`, `Service`, `ConfigMap`, `Secret`, probes y
+configuracion declarativa.
+
+Componentes:
+
+| Archivo | Responsabilidad |
+| --- | --- |
+| `infra/k8s/namespace.yml` | Namespace aislado de la PoC. |
+| `infra/k8s/configmap.yml` | Variables no secretas de ejecucion. |
+| `infra/k8s/deployment.yml` | Pod de FastAPI, probes, recursos y hardening basico. |
+| `infra/k8s/service.yml` | Service interno `ClusterIP`. |
+| `infra/k8s/kustomization.yml` | Entrada unica para `kubectl apply -k`. |
+| `scripts/minikube.ps1` | Wrapper operativo desde Windows. |
+
+Requisitos:
+
+```powershell
+minikube version
+kubectl version --client
+docker version
+```
+
+Arranque:
+
+```powershell
+minikube start
+```
+
+Comandos operativos:
+
+```powershell
+.\scripts\minikube.ps1 -Action check
+.\scripts\minikube.ps1 -Action model
+.\scripts\minikube.ps1 -Action build
+.\scripts\minikube.ps1 -Action deploy
+.\scripts\minikube.ps1 -Action status
+.\scripts\minikube.ps1 -Action smoke
+.\scripts\minikube.ps1 -Action logs
+.\scripts\minikube.ps1 -Action clean
+```
+
+Notas operativas:
+
+- `build` construye `mlops-aws-poc:local` dentro del Docker daemon de Minikube.
+- `model` genera `models/minikube-smoke-model.joblib` y lo monta como
+  `Secret` read-only.
+- `deploy` aplica los manifests Kubernetes y espera el rollout.
+- `smoke` abre un `port-forward` temporal y valida `/health`, `/model` y
+  `/predict`.
+- Para AWS, el modelo productivo sigue viniendo desde S3 mediante
+  `MODEL_S3_URI`.
 
 ### Fase 5: CI/CD con GitHub Actions
 
@@ -349,7 +410,7 @@ Criterios de validacion:
 
 Workflow:
 
-- `.github/workflows/ci.yml` ejecuta `pytest` con Python 3.13.
+- `.github/workflows/ci.yml` ejecuta `pytest` con Python 3.12.
 - El build Docker corre solo si los tests pasan.
 - La imagen se etiqueta como `mlops-aws-poc:${GITHUB_SHA}` dentro del runner.
 - La publicacion a AWS ECR queda fuera de este workflow hasta configurar IAM,
@@ -468,7 +529,7 @@ Invoke-RestMethod `
   -Uri http://192.168.1.12:8000/predict `
   -Method Post `
   -ContentType 'application/json' `
-  -Body '{"features":[1,2,3]}'
+  -Body '{"tenure":12,"monthly_charges":89.5,"support_tickets":3}'
 ```
 
 Rollback operativo:
@@ -526,14 +587,13 @@ Implementacion:
 - `aws.env.example`: variables operativas esperadas.
 - `scripts/aws.ps1`: validaciones locales de AWS CLI, template y build Docker.
 
-Secrets requeridos en GitHub:
+Secret requerido en GitHub:
 
 | Secret | Uso |
 | --- | --- |
-| `AWS_ACCESS_KEY_ID` | Credencial de despliegue. |
-| `AWS_SECRET_ACCESS_KEY` | Credencial de despliegue. |
+| `AWS_ROLE_TO_ASSUME` | IAM Role asumido por GitHub Actions mediante OIDC. |
 
-Permisos minimos de la credencial:
+Permisos minimos del role:
 
 - ECR: crear repositorio si no existe, login, push de imagen.
 - CloudFormation: crear/actualizar stack.
@@ -549,6 +609,16 @@ Ejecucion desde GitHub:
 3. Ejecutar `Run workflow`.
 4. Confirmar `environment`, `aws_region`, `ecr_repository`, `stack_name` y
    `allowed_http_cidr`.
+
+El workflow usa GitHub OIDC. No requiere access keys permanentes en GitHub.
+
+Configuracion OIDC recomendada:
+
+1. Crear un IAM Identity Provider para `https://token.actions.githubusercontent.com`.
+2. Crear un IAM Role para el repositorio `Maurog-castros/mlops-aws-poc`.
+3. Permitir `sts:AssumeRoleWithWebIdentity` solo desde ese repo y rama esperada.
+4. Guardar el ARN del role en GitHub como `AWS_ROLE_TO_ASSUME`.
+5. No guardar access keys permanentes en GitHub Actions.
 
 Validacion local previa:
 
@@ -630,7 +700,7 @@ Invoke-RestMethod `
   -Uri http://<load-balancer-url>/predict `
   -Method Post `
   -ContentType 'application/json' `
-  -Body '{"features":[1,2,3]}'
+  -Body '{"tenure":12,"monthly_charges":89.5,"support_tickets":3}'
 .\scripts\aws.ps1 -Action outputs -Region us-east-1 -StackName mlops-aws-poc-poc
 ```
 
@@ -724,8 +794,8 @@ Implementacion:
 
 - `docs/drift-monitoring.md`: estrategia conceptual y umbrales iniciales.
 - `data/drift_baseline.json`: baseline estadistico versionado.
-- `/predict` registra resumen de features en logs estructurados:
-  `feature_count`, `feature_min`, `feature_max`, `feature_mean`.
+- `/predict` registra resumen controlado de features nombradas en logs:
+  `tenure`, `monthly_charges`, `support_tickets`.
 - `scripts/check_drift.py`: compara un resumen actual contra el baseline y
   retorna codigo `2` si detecta drift.
 
@@ -733,7 +803,7 @@ Validacion:
 
 ```powershell
 $tmp = Join-Path $env:TEMP 'mlops-current-drift.json'
-'{"feature_count":3,"feature_min":1.1,"feature_max":4.1,"feature_mean":2.6}' |
+'{"features":["tenure","monthly_charges","support_tickets"],"feature_means":{"tenure":36.0,"monthly_charges":70.0,"support_tickets":2.0},"feature_stds":{"tenure":20.0,"monthly_charges":29.0,"support_tickets":1.4}}' |
   Set-Content -Path $tmp -Encoding utf8
 .\.venv\Scripts\python.exe scripts\check_drift.py --current $tmp
 ```
@@ -781,14 +851,30 @@ Se ignoran:
 Los archivos `data/README.md` y `models/README.md` si se versionan para mantener
 la estructura del proyecto.
 
+## Security decisions
+
+- No se versionan secretos, `.env`, access keys ni artefactos binarios del
+  modelo.
+- GitHub Actions despliega con OIDC y un IAM Role asumido temporalmente.
+- Los scripts locales usan credenciales configuradas fuera del repo con
+  `aws configure`.
+- ECS ejecuta la API como usuario no-root dentro del contenedor.
+- El task role solo necesita lectura del artefacto de modelo en S3.
+- El artefacto del modelo se guarda en S3 con bloqueo de acceso publico y
+  versioning.
+- Los logs registran resumenes operativos y de features, no payloads crudos ni
+  PII.
+- El modelo se descarga a `/tmp/model.joblib` en runtime y no queda embebido en
+  la imagen Docker.
+
 ## Estado actual
 
 Fases 1 a 10 implementadas para la PoC.
 
 Siguiente hito recomendado:
 
-Promover el artefacto del modelo a almacenamiento remoto, por ejemplo S3 o EFS,
-para que `/predict` pueda ejecutar inferencia real en AWS y no solo en local/LAN.
+Reemplazar el dataset sintetico por datos reales de negocio y endurecer IAM con
+politicas mas acotadas por recurso.
 
 ## Artefactos de modelo en S3
 

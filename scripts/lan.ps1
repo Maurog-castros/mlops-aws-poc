@@ -72,7 +72,7 @@ function Invoke-Smoke {
         -Uri "$baseUrl/predict" `
         -Method Post `
         -ContentType 'application/json' `
-        -Body '{"features":[1,2,3]}' `
+        -Body '{"tenure":12,"monthly_charges":89.5,"support_tickets":3}' `
         -TimeoutSec 10
 
     [pscustomobject]@{

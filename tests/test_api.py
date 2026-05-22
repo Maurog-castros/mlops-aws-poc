@@ -40,18 +40,25 @@ def test_predict_valid_payload(monkeypatch, tmp_path):
     joblib.dump(DummyModel(), model_path)
     monkeypatch.setattr("app.main.DEFAULT_MODEL_PATH", model_path)
 
-    response = client.post("/predict", json={"features": [1.0, 2.5, 3.5]})
+    response = client.post(
+        "/predict",
+        json={
+            "tenure": 12,
+            "monthly_charges": 89.5,
+            "support_tickets": 3,
+        },
+    )
 
     assert response.status_code == 200
     assert PROCESS_TIME_HEADER in response.headers
     assert response.json() == {
-        "prediction": 7.0,
+        "prediction": 104.5,
         "model_path": str(model_path),
     }
 
 
 def test_predict_invalid_payload():
-    response = client.post("/predict", json={"features": []})
+    response = client.post("/predict", json={"features": [1.0, 2.0, 3.0]})
 
     assert response.status_code == 422
     assert PROCESS_TIME_HEADER in response.headers
@@ -61,7 +68,14 @@ def test_predict_model_unavailable(monkeypatch, tmp_path):
     model_path = tmp_path / "missing.joblib"
     monkeypatch.setattr("app.main.DEFAULT_MODEL_PATH", model_path)
 
-    response = client.post("/predict", json={"features": [1.0]})
+    response = client.post(
+        "/predict",
+        json={
+            "tenure": 1,
+            "monthly_charges": 20,
+            "support_tickets": 1,
+        },
+    )
 
     assert response.status_code == 503
     assert PROCESS_TIME_HEADER in response.headers

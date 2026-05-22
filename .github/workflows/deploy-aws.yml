@@ -23,9 +23,22 @@ on:
         description: CIDR allowed to access the public ALB.
         required: true
         default: 0.0.0.0/0
+      model_s3_uri:
+        description: Optional S3 URI for model.joblib.
+        required: false
+        default: ""
+      model_s3_bucket:
+        description: S3 bucket that stores the model artifact.
+        required: false
+        default: mlops-aws-poc-placeholder
+      model_s3_key:
+        description: S3 key for model.joblib.
+        required: false
+        default: models/placeholder/model.joblib
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   deploy:
@@ -39,8 +52,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Resolve default network
@@ -104,7 +116,11 @@ jobs:
               ImageUri="${{ steps.image.outputs.uri }}" \
               VpcId="${{ steps.network.outputs.vpc_id }}" \
               PublicSubnetIds="${{ steps.network.outputs.subnet_ids }}" \
-              AllowedHttpCidr="${{ inputs.allowed_http_cidr }}"
+              AllowedHttpCidr="${{ inputs.allowed_http_cidr }}" \
+              ModelPath="/tmp/model.joblib" \
+              ModelS3Uri="${{ inputs.model_s3_uri }}" \
+              ModelS3Bucket="${{ inputs.model_s3_bucket }}" \
+              ModelS3Key="${{ inputs.model_s3_key }}"
 
       - name: Show service URL
         run: |

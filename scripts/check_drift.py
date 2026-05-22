@@ -5,9 +5,8 @@ from typing import Any
 
 
 DEFAULT_THRESHOLDS = {
-    "feature_mean": 0.25,
-    "feature_min": 0.50,
-    "feature_max": 0.50,
+    "feature_means": 0.25,
+    "feature_stds": 0.50,
 }
 
 
@@ -33,13 +32,19 @@ def main() -> None:
     current = load_json(args.current)
     alerts: list[str] = []
 
-    if current["feature_count"] != baseline["feature_count"]:
-        alerts.append("feature_count_changed")
+    baseline_features = set(baseline["features"])
+    current_features = set(current["features"])
+    if current_features != baseline_features:
+        alerts.append("feature_contract_changed")
 
-    for key, threshold in DEFAULT_THRESHOLDS.items():
-        delta = relative_delta(float(current[key]), float(baseline[key]))
-        if delta >= threshold:
-            alerts.append(f"{key}_drift")
+    for group, threshold in DEFAULT_THRESHOLDS.items():
+        for feature_name in sorted(baseline_features & current_features):
+            delta = relative_delta(
+                float(current[group][feature_name]),
+                float(baseline[group][feature_name]),
+            )
+            if delta >= threshold:
+                alerts.append(f"{feature_name}_{group}_drift")
 
     result = {
         "status": "drift_detected" if alerts else "ok",
@@ -54,4 +59,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

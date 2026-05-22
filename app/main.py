@@ -86,28 +86,30 @@ def model_info() -> ModelInfoResponse:
         status=metadata.status,
         metric_name=metadata.metric_name,
         metric_value=metadata.metric_value,
+        secondary_metrics=metadata.secondary_metrics,
         dataset_name=metadata.dataset_name,
         artifact_path=metadata.artifact_path,
         metadata_path=str(metadata_path),
+        features=list(metadata.features),
     )
 
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict_endpoint(payload: PredictionRequest) -> PredictionResponse:
     model_path = Path(os.getenv("MODEL_PATH", str(DEFAULT_MODEL_PATH)))
-    feature_summary = summarize_features(payload.features)
+    feature_vector = payload.to_feature_vector()
+    feature_summary = summarize_features(payload.model_dump())
 
     try:
-        prediction = predict(payload.features, model_path)
+        prediction = predict(feature_vector, model_path)
     except ModelUnavailableError as exc:
         logger.error(
             "model_unavailable",
             extra={
                 "_model_path": str(model_path),
-                "_feature_count": len(payload.features),
-                "_feature_min": feature_summary["feature_min"],
-                "_feature_max": feature_summary["feature_max"],
-                "_feature_mean": feature_summary["feature_mean"],
+                "_tenure": feature_summary["tenure"],
+                "_monthly_charges": feature_summary["monthly_charges"],
+                "_support_tickets": feature_summary["support_tickets"],
             },
         )
         raise HTTPException(
@@ -119,10 +121,9 @@ def predict_endpoint(payload: PredictionRequest) -> PredictionResponse:
             "prediction_failed",
             extra={
                 "_model_path": str(model_path),
-                "_feature_count": len(payload.features),
-                "_feature_min": feature_summary["feature_min"],
-                "_feature_max": feature_summary["feature_max"],
-                "_feature_mean": feature_summary["feature_mean"],
+                "_tenure": feature_summary["tenure"],
+                "_monthly_charges": feature_summary["monthly_charges"],
+                "_support_tickets": feature_summary["support_tickets"],
             },
         )
         raise HTTPException(
@@ -134,10 +135,9 @@ def predict_endpoint(payload: PredictionRequest) -> PredictionResponse:
         "prediction_completed",
         extra={
             "_model_path": str(model_path),
-            "_feature_count": len(payload.features),
-            "_feature_min": feature_summary["feature_min"],
-            "_feature_max": feature_summary["feature_max"],
-            "_feature_mean": feature_summary["feature_mean"],
+            "_tenure": feature_summary["tenure"],
+            "_monthly_charges": feature_summary["monthly_charges"],
+            "_support_tickets": feature_summary["support_tickets"],
         },
     )
 

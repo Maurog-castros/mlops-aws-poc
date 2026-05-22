@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlops-aws-poc-api
+  namespace: mlops-aws-poc
+  labels:
+    app.kubernetes.io/name: mlops-aws-poc-api
+    app.kubernetes.io/part-of: mlops-aws-poc
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mlops-aws-poc-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

@@ -13,18 +13,17 @@ Esta PoC separa dos tipos de monitoreo:
 No se registra el payload completo de inferencia. Para reducir riesgo operativo,
 solo se registra un resumen:
 
-- `feature_count`
-- `feature_min`
-- `feature_max`
-- `feature_mean`
+- `tenure`
+- `monthly_charges`
+- `support_tickets`
 
 ## Metricas iniciales
 
 | Metrica | Uso | Umbral inicial |
 | --- | --- | --- |
-| Cambio de `feature_count` | Detectar contrato distinto | cualquier cambio |
-| Cambio relativo de media | Detectar drift simple | `>= 0.25` |
-| Cambio relativo de minimo/maximo | Detectar valores fuera de rango | `>= 0.50` |
+| Cambio de contrato de features | Detectar payload incompatible | cualquier cambio |
+| Cambio relativo de media por feature | Detectar drift simple | `>= 0.25` |
+| Cambio relativo de desviacion estandar por feature | Detectar dispersion distinta | `>= 0.50` |
 
 ## Flujo
 
@@ -40,4 +39,3 @@ solo se registra un resumen:
 - Great Expectations para validaciones de calidad de datos.
 - SageMaker Model Monitor si el servicio se mueve a SageMaker.
 - S3 como almacenamiento de muestras y reportes.
-

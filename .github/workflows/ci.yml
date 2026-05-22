@@ -13,7 +13,7 @@ permissions:
 
 env:
   IMAGE_NAME: mlops-aws-poc
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.12"
 
 jobs:
   test:

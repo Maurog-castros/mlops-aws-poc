@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-aws-poc
+  labels:
+    app.kubernetes.io/name: mlops-aws-poc
+    app.kubernetes.io/part-of: mlops-aws-poc
