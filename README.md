@@ -351,6 +351,42 @@ kubectl version --client
 docker version
 ```
 
+Instalacion manual de Minikube en Windows, si `minikube` no existe:
+
+```powershell
+New-Item -Path 'C:\' -Name 'minikube' -ItemType Directory -Force
+
+$ProgressPreference = 'SilentlyContinue'
+
+Invoke-WebRequest `
+  -OutFile 'C:\minikube\minikube.exe' `
+  -Uri 'https://github.com/kubernetes/minikube/releases/latest/download/minikube-windows-amd64.exe' `
+  -UseBasicParsing
+```
+
+Activar `minikube` en la sesion actual:
+
+```powershell
+$env:Path += ';C:\minikube'
+minikube version
+```
+
+Dejarlo permanente en el `PATH` del usuario:
+
+```powershell
+$oldPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+
+if ($oldPath -notlike '*C:\minikube*') {
+    [Environment]::SetEnvironmentVariable(
+        'Path',
+        "$oldPath;C:\minikube",
+        'User'
+    )
+}
+```
+
+Despues de cambiar el `PATH` permanente, cerrar y abrir PowerShell.
+
 Arranque:
 
 ```powershell
@@ -380,6 +416,22 @@ Notas operativas:
   `/predict`.
 - Para AWS, el modelo productivo sigue viniendo desde S3 mediante
   `MODEL_S3_URI`.
+
+Troubleshooting:
+
+- Si PowerShell dice `minikube: The term 'minikube' is not recognized`, validar
+  que exista `C:\minikube\minikube.exe` y ejecutar:
+
+```powershell
+$env:Path += ';C:\minikube'
+minikube version
+```
+
+- Si falta `kubectl`, instalarlo con:
+
+```powershell
+winget install Kubernetes.kubectl
+```
 
 ### Fase 5: CI/CD con GitHub Actions
 
@@ -625,6 +677,24 @@ Validacion local previa:
 ```powershell
 .\scripts\aws.ps1 -Action package
 .\scripts\aws.ps1 -Action validate-template -Region us-east-1
+```
+
+Validacion directa con `cfn-lint`:
+
+```powershell
+.\.venv\Scripts\cfn-lint.exe infra\aws\ecs-fargate.yml
+```
+
+Nota para VS Code:
+
+Si el editor muestra errores como `Unresolved tag: !Ref`, `Unresolved tag:
+!Sub` o `Unresolved tag: !GetAtt`, normalmente es un falso positivo del
+validador YAML generico. Esos tags son funciones propias de CloudFormation. Este
+repo incluye `.vscode/settings.json` con `yaml.customTags` para que VS Code los
+reconozca. Si el warning sigue visible, ejecutar:
+
+```text
+Ctrl+Shift+P -> Developer: Reload Window
 ```
 
 Despliegue desde la maquina local:
